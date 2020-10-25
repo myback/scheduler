@@ -15,43 +15,61 @@ func main() {
 	sch := scheduler.New()
 	ctx := context.Background()
 
+	var group int
 	for i := 1; i <= 10; i++ {
+		if i%2 == 0 {
+			group++
+		}
+
 		n := i
+		g := group
+
 		j := func() {
-			fmt.Printf("run jobFunc: %d\n", n)
+			fmt.Printf("run jobFunc: testing/test%d/%d\n", g, n)
 			time.Sleep(300 * time.Microsecond)
 		}
+
 		if err := sch.AddJob(
 			ctx,
-			fmt.Sprintf("test%d", i),
+			fmt.Sprintf("testing/test%d", g),
+			fmt.Sprintf("%d", n),
 			n,
 			j); err != nil {
 			fmt.Println(err)
 		}
 	}
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// Error ErrorJobAlreadyExists
-	if err := sch.AddJob(ctx, "test1", 3, func() { fmt.Println("run updated jobFunc_1") }); err != nil {
+	if err := sch.AddJob(ctx, "testing/test0", "1", 3, func() { fmt.Println("run updated jobFunc testing/test1/1") }); err != nil {
 		fmt.Println(err)
 	}
 
 	// Error ErrorJobNotFound
-	if err := sch.CancelJob("test"); err != nil {
+	if err := sch.CancelJob("testing"); err != nil {
 		fmt.Println(err)
 	}
 
-	sch.UpdateJobInterval("test10", 1)
+	if err := sch.UpdateJobInterval("testing/test5/10", 1); err != nil {
+		fmt.Println("testing/test5/10", err)
+	} else {
+		fmt.Println("Interval for job testing/test5/10 updated")
+	}
 
 	fmt.Println("Running jobs:", sch.GetNumberJobs())
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
-	sch.CancelJob("test1")
-	sch.CancelJob("test4")
+	if err := sch.CancelJob("testing/test0/1"); err != nil {
+		fmt.Println("testing/test0/1", err)
+	}
+
+	if err := sch.CancelJob("testing/test2"); err != nil {
+		fmt.Println("testing/test2", err)
+	}
 
 	fmt.Println("Running jobs:", sch.GetNumberJobs())
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	sch.GracefulShutdown()
 	sch.WaitWithTimeout(30)

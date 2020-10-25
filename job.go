@@ -8,10 +8,10 @@ import (
 )
 
 type job struct {
-	cancelFunc context.CancelFunc
-	jobFunc    func()
-	name       string
-	ticker     *time.Ticker
+	cancelFunc     context.CancelFunc
+	jobFunc        func()
+	namespacedName string
+	ticker         *time.Ticker
 }
 
 func (j *job) cancel() {
@@ -25,7 +25,7 @@ func (j *job) start(ctx context.Context) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("%s: ERROR: %s\n", j.name, r)
+				fmt.Printf("%s: ERROR: %s\n", j.namespacedName, r)
 			}
 		}()
 

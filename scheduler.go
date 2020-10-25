@@ -57,16 +57,31 @@ func (sch *Scheduler) update(key uint32, intervalSec time.Duration) error {
 	return nil
 }
 
-func (sch *Scheduler) AddJob(ctx context.Context, name string, intervalSec int, j func()) error {
-	return sch.add(ctx, murmur3.Sum32([]byte(name)), &job{
-		name:    name,
-		ticker:  time.NewTicker(time.Duration(intervalSec) * time.Second),
-		jobFunc: j,
+func (sch *Scheduler) AddJob(ctx context.Context, namespacedName, jobName string, intervalSec int, j func()) error {
+	return sch.add(ctx, murmur3.Sum32([]byte(namespacedName+"/"+jobName)), &job{
+		namespacedName: namespacedName,
+		ticker:         time.NewTicker(time.Duration(intervalSec) * time.Second),
+		jobFunc:        j,
 	})
 }
 
-func (sch *Scheduler) CancelJob(name string) error {
-	return sch.cancel(murmur3.Sum32([]byte(name)))
+func (sch *Scheduler) CancelJob(namespacedName string) error {
+	if namespacedName == "" {
+		return ErrorJobNotFound
+	}
+
+	id := murmur3.Sum32([]byte(namespacedName))
+
+	var err error
+	for _id, j := range sch.jobs {
+		if j.namespacedName == namespacedName || _id == id {
+			if e := sch.cancel(_id); e != nil {
+				err = e
+			}
+		}
+	}
+
+	return err
 }
 
 func (sch *Scheduler) GetNumberJobs() int {
@@ -77,8 +92,12 @@ func (sch *Scheduler) GetNumberJobs() int {
 }
 
 func (sch *Scheduler) GracefulShutdown() {
-	for id := range sch.jobs {
-		sch.cancel(id)
+	sch.mu.Lock()
+	defer sch.mu.Unlock()
+
+	for id, j := range sch.jobs {
+		j.cancel()
+		delete(sch.jobs, id)
 	}
 }
 
@@ -88,6 +107,7 @@ func (sch *Scheduler) Wait() {
 
 func (sch *Scheduler) WaitWithTimeout(timeout int) {
 	done := make(chan bool)
+
 	go func() {
 		t := time.NewTimer(time.Duration(timeout) * time.Second)
 		defer t.Stop()
@@ -106,8 +126,8 @@ func (sch *Scheduler) WaitWithTimeout(timeout int) {
 	close(done)
 }
 
-func (sch *Scheduler) UpdateJobInterval(name string, intervalSec int) error {
-	return sch.update(murmur3.Sum32([]byte(name)), time.Duration(intervalSec)*time.Second)
+func (sch *Scheduler) UpdateJobInterval(namespacedName string, intervalSec int) error {
+	return sch.update(murmur3.Sum32([]byte(namespacedName)), time.Duration(intervalSec)*time.Second)
 }
 
 func New() *Scheduler {
